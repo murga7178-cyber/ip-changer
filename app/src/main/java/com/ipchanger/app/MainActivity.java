@@ -1,6 +1,8 @@
 package com.ipchanger.app;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.view.View;
@@ -9,6 +11,7 @@ import android.webkit.WebViewClient;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.Spinner;
 import android.widget.TextView;
@@ -65,6 +68,8 @@ public class MainActivity extends Activity {
     private Spinner intervalSp;
     private EditText urlBox;
     private final LinkedList<String> history = new LinkedList<>();
+    private LinearLayout chipRow;
+    private final List<String[]> sites = new ArrayList<>();
 
     private int dp(int v) {
         return (int) (v * getResources().getDisplayMetrics().density);
@@ -141,6 +146,24 @@ public class MainActivity extends Activity {
         row3.addView(goBtn, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         root.addView(row3);
 
+        // Websites row: [+] [saved sites...]
+        LinearLayout row4 = new LinearLayout(this);
+        row4.setOrientation(LinearLayout.HORIZONTAL);
+        Button plusBtn = new Button(this);
+        plusBtn.setText("+");
+        plusBtn.setTextSize(20);
+        plusBtn.setTextColor(Color.WHITE);
+        plusBtn.setBackgroundColor(Color.parseColor("#16A34A"));
+        HorizontalScrollView hs = new HorizontalScrollView(this);
+        chipRow = new LinearLayout(this);
+        chipRow.setOrientation(LinearLayout.HORIZONTAL);
+        hs.addView(chipRow);
+        LinearLayout.LayoutParams plp = new LinearLayout.LayoutParams(dp(56), LinearLayout.LayoutParams.WRAP_CONTENT);
+        plp.setMargins(0, 0, dp(6), 0);
+        row4.addView(plusBtn, plp);
+        row4.addView(hs, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        root.addView(row4);
+
         // WebView
         web = new WebView(this);
         web.getSettings().setJavaScriptEnabled(true);
@@ -150,6 +173,15 @@ public class MainActivity extends Activity {
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
 
         setContentView(root);
+
+        plusBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showAddDialog();
+            }
+        });
+        loadSites();
+        refreshChips();
 
         startBtn.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -174,6 +206,103 @@ public class MainActivity extends Activity {
         });
 
         web.loadUrl("https://api.ipify.org");
+    }
+
+    private void loadSites() {
+        sites.clear();
+        SharedPreferences sp = getSharedPreferences("ipchanger", MODE_PRIVATE);
+        String raw = sp.getString("sites", null);
+        if (raw == null) {
+            sites.add(new String[]{"IP चेक", "https://api.ipify.org"});
+            saveSites();
+            return;
+        }
+        for (String line : raw.split("\n")) {
+            String[] p = line.split("\t");
+            if (p.length == 2) sites.add(p);
+        }
+    }
+
+    private void saveSites() {
+        StringBuilder sb = new StringBuilder();
+        for (String[] s : sites) sb.append(s[0]).append('\t').append(s[1]).append('\n');
+        getSharedPreferences("ipchanger", MODE_PRIVATE).edit().putString("sites", sb.toString()).apply();
+    }
+
+    private void refreshChips() {
+        chipRow.removeAllViews();
+        for (final String[] s : sites) {
+            Button b = new Button(this);
+            b.setText(s[0]);
+            b.setAllCaps(false);
+            b.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    openSite(s[1]);
+                }
+            });
+            b.setOnLongClickListener(new View.OnLongClickListener() {
+                @Override
+                public boolean onLongClick(View v) {
+                    confirmDelete(s);
+                    return true;
+                }
+            });
+            chipRow.addView(b);
+        }
+    }
+
+    private void openSite(String u) {
+        urlBox.setText(u);
+        web.loadUrl(u);
+    }
+
+    private void showAddDialog() {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(20), dp(10), dp(20), 0);
+        final EditText nameEt = new EditText(this);
+        nameEt.setHint("नाम (जैसे Facebook)");
+        nameEt.setSingleLine(true);
+        final EditText urlEt = new EditText(this);
+        urlEt.setHint("वेबसाइट (जैसे m.facebook.com)");
+        urlEt.setSingleLine(true);
+        box.addView(nameEt);
+        box.addView(urlEt);
+        new AlertDialog.Builder(this)
+                .setTitle("वेबसाइट जोड़ें")
+                .setView(box)
+                .setPositiveButton("जोड़ें", new android.content.DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(android.content.DialogInterface d, int w) {
+                        String name = nameEt.getText().toString().replace("\t", " ").replace("\n", " ").trim();
+                        String u = urlEt.getText().toString().replace("\t", "").replace("\n", "").trim();
+                        if (u.isEmpty()) return;
+                        if (!u.startsWith("http://") && !u.startsWith("https://")) u = "https://" + u;
+                        if (name.isEmpty()) name = u.replaceFirst("^https?://", "");
+                        sites.add(new String[]{name, u});
+                        saveSites();
+                        refreshChips();
+                        openSite(u);
+                    }
+                })
+                .setNegativeButton("रद्द", null)
+                .show();
+    }
+
+    private void confirmDelete(final String[] s) {
+        new AlertDialog.Builder(this)
+                .setMessage("'" + s[0] + "' हटाएँ?")
+                .setPositiveButton("हटाएँ", new android.content.DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(android.content.DialogInterface d, int w) {
+                        sites.remove(s);
+                        saveSites();
+                        refreshChips();
+                    }
+                })
+                .setNegativeButton("रद्द", null)
+                .show();
     }
 
     private void startClicked() {
