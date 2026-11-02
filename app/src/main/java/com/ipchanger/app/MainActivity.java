@@ -154,13 +154,13 @@ public class MainActivity extends Activity {
         startBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                onStart();
+                startClicked();
             }
         });
         stopBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                onStop();
+                stopClicked();
             }
         });
         goBtn.setOnClickListener(new View.OnClickListener() {
@@ -176,7 +176,7 @@ public class MainActivity extends Activity {
         web.loadUrl("https://api.ipify.org");
     }
 
-    private void onStart() {
+    private void startClicked() {
         if (!WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE)) {
             setStatus("इस फ़ोन का WebView प्रॉक्सी सपोर्ट नहीं करता।\n'Android System WebView' को Play Store से अपडेट करें।");
             return;
@@ -186,7 +186,7 @@ public class MainActivity extends Activity {
         startLoop(cc, sec);
     }
 
-    private void onStop() {
+    private void stopClicked() {
         running = false;
         gen++;
         if (WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE)) {
